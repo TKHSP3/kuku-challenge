@@ -325,15 +325,18 @@ function tick(){
 }
 
 /* ---------- 読み上げ(ブラウザの機能) ---------- */
-function speak(text){
+function speak(text,cb){
+  var fired=false;function fin(){if(fired)return;fired=true;if(cb)cb();}
+  if(cb) setTimeout(fin,6000);
   try{
-    if(!window.speechSynthesis) return;
+    if(!window.speechSynthesis){if(cb)setTimeout(fin,1800);return;}
     speechSynthesis.cancel();
     var u=new SpeechSynthesisUtterance(text);u.lang="ja-JP";u.rate=.85;u.pitch=1.1;
+    u.onend=fin;u.onerror=fin;
     var vs=speechSynthesis.getVoices();
     for(var i=0;i<vs.length;i++){if(/^ja/i.test(vs[i].lang)){u.voice=vs[i];break;}}
     speechSynthesis.speak(u);
-  }catch(e){}
+  }catch(e){fin();}
 }
 
 /* ---------- 音声認識(2つの方法を用意) ---------- */
@@ -431,13 +434,13 @@ function stopTimer(){if(qTimer){clearInterval(qTimer);qTimer=0;}var a=document.g
 function clearTimers(){timers.forEach(clearTimeout);timers=[];stopTimer();}
 function timerHtml(){return '<div class="timer" id="timer"><div class="tbar"><i id="tfill"></i></div><b id="tnum">15</b></div>';}
 function ensureTimer(){
-  if(!state.timer||!G||G.done){stopTimer();return;}
+  if(!state.timer||!G||G.done||G.paused){stopTimer();return;}
   if(!G.deadline){G.deadline=Date.now()+15000;lastSec=-1;}
   if(!qTimer) qTimer=setInterval(tickTimer,100);
   tickTimer();
 }
 function tickTimer(){
-  if(screenName!=="quiz"||!G||G.done){stopTimer();return;}
+  if(screenName!=="quiz"||!G||G.done||G.paused){stopTimer();return;}
   var ms=G.deadline-Date.now(),sec=Math.max(0,Math.ceil(ms/1000));
   var f=document.getElementById("tfill"),n=document.getElementById("tnum"),t=document.getElementById("timer"),a=document.getElementById("alarm");
   if(f)f.style.width=Math.max(0,ms/150)+"%";
@@ -451,7 +454,7 @@ function tickTimer(){
 function timeUp(){
   stopTimer();stopListening();
   var q=G.list[G.i];
-  G.done=true;G.res[G.i]="ng";G.wrong.push(q);
+  G.done=true;G.res[G.i]="ng";if(!G.missed)G.wrong.push(q);
   G.fbmsg={cls:"ng",html:"じかんぎれ! こたえは "+(q.a*q.b)+" だよ<small>つぎは もっと はやく いってみよう</small>"};
   sndNg();renderQuiz();reactMascot("shake");speak(trad(q.a,q.b).text);
 }
@@ -600,7 +603,7 @@ function renderQuiz(){
 function qCorrect(first){
   var q=G.list[G.i];
   stopListening();stopTimer();
-  G.done=true;G.res[G.i]="ok";if(first)G.score++;
+  G.done=true;G.res[G.i]=G.missed?"ng":"ok";if(first)G.score++;
   G.fbmsg={cls:"ok",html:randPraise()+(first?'<small>1かいで せいかい! ほし +1</small>':'<small>せいかい!</small>')};
   if(first){state.totalStars++;save("kuku.stars",state.totalStars);showStars();}
   sndOk();confetti(first?90:40);
@@ -612,12 +615,21 @@ function qWrong(keepMic){
   if(!keepMic) stopListening();
   G.tries++;
   if(state.timer){
-    G.fbmsg={cls:"ng",html:"こたえが ちがうよ!<small>じかんいない なら なんど でも こたえられるよ</small>"};
-    G.typed="";
-    sndNg();
-    if(state.method!=="voice") speak("こたえが ちがうよ");
-    renderQuiz();reactMascot("shake");
-    if(!keepMic&&state.method==="voice"&&voiceAvailable()) later(startQuizMic,700);
+    var idx=G.i, ans=q.a*q.b;
+    if(!G.missed){G.missed=true;G.res[G.i]="ng";G.wrong.push(q);}
+    stopTimer();stopListening();
+    G.paused=true;G.typed="";G.heard="";
+    G.fbmsg={cls:"ng",html:"こたえが ちがうよ! こたえは "+ans+"<small>よく きいて、もういちど いってみよう</small>"};
+    sndNg();renderQuiz();reactMascot("shake");
+    later(function(){
+      speak("こたえは "+trad(q.a,q.b).text,function(){
+        if(screenName!=="quiz"||!G||G.i!==idx||G.done||!G.paused)return;
+        G.paused=false;G.deadline=null;
+        G.fbmsg={cls:"info",html:"さあ、もういちど! こえに だして いってみよう"};
+        renderQuiz();
+        if(state.method==="voice"&&voiceAvailable()) later(startQuizMic,300);
+      });
+    },900);
     return;
   }
   if(G.tries>=2){
@@ -632,12 +644,12 @@ function qWrong(keepMic){
 }
 function submitValue(v){
   var q=G.list[G.i];
-  if(G.done)return;
+  if(G.done||G.paused)return;
   if(v===q.a*q.b){qCorrect(G.tries===0);}
   else{ if(state.method==="pick"){G.badPick=G.badPick||{};G.badPick[v]=1;} qWrong(); }
 }
 function startQuizMic(){
-  if(G.done)return;
+  if(G.done||G.paused)return;
   if(listening){stopListening();renderQuiz();return;}
   var q=G.list[G.i], done=false;
   G.heard="";if(!G.tries)G.fbmsg=null;
@@ -661,7 +673,7 @@ function startQuizMic(){
 }
 function nextQuestion(auto){
   clearTimers();
-  G.i++;G.deadline=null;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
+  G.i++;G.deadline=null;G.missed=false;G.paused=false;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
   if(G.i>=G.list.length){finishQuiz();return;}
   renderQuiz();
   if(auto&&state.method==="voice"&&voiceAvailable()) startQuizMic();
