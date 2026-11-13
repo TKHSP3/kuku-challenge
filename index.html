@@ -429,10 +429,10 @@ function later(fn,ms){var id=setTimeout(fn,ms);timers.push(id);return id;}
 var qTimer=0,lastSec=-1;
 function stopTimer(){if(qTimer){clearInterval(qTimer);qTimer=0;}var a=document.getElementById("alarm");if(a)a.className="";}
 function clearTimers(){timers.forEach(clearTimeout);timers=[];stopTimer();}
-function timerHtml(){return '<div class="timer" id="timer"><div class="tbar"><i id="tfill"></i></div><b id="tnum">10</b></div>';}
+function timerHtml(){return '<div class="timer" id="timer"><div class="tbar"><i id="tfill"></i></div><b id="tnum">15</b></div>';}
 function ensureTimer(){
   if(!state.timer||!G||G.done){stopTimer();return;}
-  if(!G.deadline){G.deadline=Date.now()+10000;lastSec=-1;}
+  if(!G.deadline){G.deadline=Date.now()+15000;lastSec=-1;}
   if(!qTimer) qTimer=setInterval(tickTimer,100);
   tickTimer();
 }
@@ -440,7 +440,7 @@ function tickTimer(){
   if(screenName!=="quiz"||!G||G.done){stopTimer();return;}
   var ms=G.deadline-Date.now(),sec=Math.max(0,Math.ceil(ms/1000));
   var f=document.getElementById("tfill"),n=document.getElementById("tnum"),t=document.getElementById("timer"),a=document.getElementById("alarm");
-  if(f)f.style.width=Math.max(0,ms/100)+"%";
+  if(f)f.style.width=Math.max(0,ms/150)+"%";
   if(n)n.textContent=sec;
   var hot=sec<=5&&ms>0;
   if(t)t.classList.toggle("hot",hot);
@@ -471,7 +471,7 @@ function renderHome(){
   }
   h+='</div>';
   h+='<div class="row" style="margin-top:12px"><button class="pill" data-act="all">ぜんぶ えらぶ</button><button class="pill" data-act="none">ぜんぶ はずす</button>'+
-     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><h2>クイズの とき</h2><div class="row"><button class="pill" data-act="timer" aria-pressed="'+state.timer+'">1もん 10びょう(あかく ひかる!)</button><button class="pill" data-act="auto" aria-pressed="'+state.auto+'">せいかいしたら じどうで つぎへ(こえは マイクも じどう)</button></div>';
+     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><h2>クイズの とき</h2><div class="row"><button class="pill" data-act="timer" aria-pressed="'+state.timer+'">1もん 15びょう(あかく ひかる!)</button><button class="pill" data-act="auto" aria-pressed="'+state.auto+'">せいかいしたら じどうで つぎへ(こえは マイクも じどう)</button></div>';
   var none=state.sel.length===0;
   h+='<h2>あそびかた</h2><div class="modes">'+
    '<button class="mode flash" data-act="flash"'+(none?' disabled':'')+'><svg><use href="#i-card"/></svg>フラッシュカード<small>めくって おぼえる</small></button>'+
