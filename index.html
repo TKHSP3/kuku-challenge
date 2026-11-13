@@ -241,7 +241,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 var state = {
   sel: load("kuku.sel",[2]),
-  order: load("kuku.order","rand"),
+  order: load("kuku.order","rand"),auto: load("kuku.auto",true),
   method: load("kuku.method","voice"),
   totalStars: load("kuku.stars",0)
 };
@@ -429,7 +429,7 @@ function renderHome(){
   }
   h+='</div>';
   h+='<div class="row" style="margin-top:12px"><button class="pill" data-act="all">ぜんぶ えらぶ</button><button class="pill" data-act="none">ぜんぶ はずす</button>'+
-     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div>';
+     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><h2>クイズの とき</h2><div class="row"><button class="pill" data-act="auto" aria-pressed="'+state.auto+'">せいかいしたら じどうで つぎへ(こえは マイクも じどう)</button></div>';
   var none=state.sel.length===0;
   h+='<h2>あそびかた</h2><div class="modes">'+
    '<button class="mode flash" data-act="flash"'+(none?' disabled':'')+'><svg><use href="#i-card"/></svg>フラッシュカード<small>めくって おぼえる</small></button>'+
@@ -561,6 +561,7 @@ function qCorrect(first){
   if(first){state.totalStars++;save("kuku.stars",state.totalStars);showStars();}
   sndOk();confetti(first?90:40);
   renderQuiz();reactMascot("hop");
+  if(state.auto){var idx=G.i;later(function(){if(screenName==="quiz"&&G&&G.i===idx&&G.done)nextQuestion(true);},1800);}
 }
 function qWrong(){
   var q=G.list[G.i];
@@ -600,6 +601,13 @@ function startQuizMic(){
     fail:function(why){micFail(why,function(){renderQuiz();});}
   };
   if(startListening(h)) renderQuiz();
+}
+function nextQuestion(auto){
+  clearTimers();
+  G.i++;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
+  if(G.i>=G.list.length){finishQuiz();return;}
+  renderQuiz();
+  if(auto&&state.method==="voice"&&voiceAvailable()) startQuizMic();
 }
 function finishQuiz(){ G.kind="quiz"; go("result",function(){}); }
 
@@ -662,10 +670,8 @@ app.addEventListener("click",function(e){
     var t=document.getElementById("typed");if(t)t.innerHTML=G.typed||"&nbsp;";
   }
   else if(act==="pick"){submitValue(+el.getAttribute("data-v"));}
-  else if(act==="qnext"){
-    G.i++;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
-    if(G.i>=G.list.length)finishQuiz();else renderQuiz();
-  }
+  else if(act==="qnext"){nextQuestion(false);}
+  else if(act==="auto"){state.auto=!state.auto;save("kuku.auto",state.auto);renderHome();}
 });
 addEventListener("keydown",function(e){
   if(screenName!=="quiz"||!G||G.done||state.method!=="keys")return;
