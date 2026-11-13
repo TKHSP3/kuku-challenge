@@ -339,6 +339,8 @@ var nativeBroken=false, dict=null, listener=null, listening=false, nativeRec=nul
   }catch(e){}
 })();
 function voiceAvailable(){return (NativeSR&&!nativeBroken)||!!dict;}
+var lastDiag="";
+function diag(m){lastDiag=m;var e=document.getElementById("heard");if(e)e.textContent=m;}
 function stopListening(){
   listening=false;
   try{if(nativeRec){nativeRec.onresult=nativeRec.onend=nativeRec.onerror=null;nativeRec.abort();}}catch(e){}
@@ -348,7 +350,7 @@ function stopListening(){
 /* h = {partial(text), final(text), end(reason), fail(msg)} */
 function startListening(h){
   stopListening();
-  listener=h; listening=true;
+  listener=h; listening=true; lastDiag="";
   if(NativeSR&&!nativeBroken){
     try{
       var r=new NativeSR();nativeRec=r;
@@ -358,14 +360,19 @@ function startListening(h){
         for(var i=0;i<res.length;i++) alts.push(res[i].transcript);
         if(res.isFinal) h.final(alts); else h.partial(alts);
       };
+      r.onstart=function(){diag("マイクを ひらいたよ。はなしてね");};
+      r.onaudiostart=function(){diag("おとを きいているよ…");};
+      r.onspeechstart=function(){diag("こえが きこえたよ…");};
+      r.onnomatch=function(){diag("ことばが わからなかったよ");};
       r.onerror=function(ev){
+        diag("エラー: "+ev.error);
         if(ev.error==="not-allowed"||ev.error==="service-not-allowed"||ev.error==="audio-capture"){
           nativeBroken=true; listening=false; nativeRec=null;
           h.fail(dict?"retry":"deny");
         } else if(ev.error==="no-speech"||ev.error==="aborted"){ /* end で処理 */ }
         else { h.fail("error"); }
       };
-      r.onend=function(){nativeRec=null;h.end("ended");};
+      r.onend=function(){nativeRec=null;h.end(lastDiag);};
       r.start();
       return true;
     }catch(e){ nativeBroken=true; nativeRec=null; }
@@ -469,7 +476,7 @@ function startFlashMic(){
       if(done)return;
       if(flashJudgeAndReact(t)){done=true;flashCorrect();}
       else{stopListening();G.fb={cls:"ng",html:"おしい! もういちど いってみよう<small>こたえは めくると みられるよ</small>"};sndNg();reactMascot("shake");renderFlash();}},
-    end:function(){ if(listening&&!done){listening=false;G.fb={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね"};renderFlash();} },
+    end:function(){ if(listening&&!done){listening=false;G.fb={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね<small>"+esc(lastDiag||"マイクから おとが とどいていません")+"</small>"};renderFlash();} },
     fail:function(why){micFail(why,function(){renderFlash();},startFlashMic);}
   };
   if(startListening(h)){renderFlash();}
@@ -589,7 +596,7 @@ function startQuizMic(){
       var alts=Array.isArray(t)?t:[t];G.heard="きこえた:「"+alts[0]+"」";
       for(var i=0;i<alts.length;i++){ if(judgeSpeech(alts[i],q.a,q.b)){done=true;qCorrect(G.tries===0);return;} }
       done=true;qWrong();},
-    end:function(){ if(listening&&!done){listening=false;G.fbmsg={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね"};renderQuiz();} },
+    end:function(){ if(listening&&!done){listening=false;G.fbmsg={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね<small>"+esc(lastDiag||"マイクから おとが とどいていません")+"</small>"};renderQuiz();} },
     fail:function(why){micFail(why,function(){renderQuiz();});}
   };
   if(startListening(h)) renderQuiz();
