@@ -368,7 +368,7 @@ function startListening(h){
   if(NativeSR&&!nativeBroken){
     try{
       var r=new NativeSR();nativeRec=r;
-      r.lang="ja-JP";r.interimResults=true;r.maxAlternatives=5;r.continuous=false;
+      r.lang="ja-JP";r.interimResults=true;r.maxAlternatives=5;r.continuous=!!h.keep;
       r.onresult=function(ev){
         var res=ev.results[ev.results.length-1],alts=[];
         for(var i=0;i<res.length;i++) alts.push(res[i].transcript);
@@ -607,9 +607,9 @@ function qCorrect(first){
   renderQuiz();reactMascot("hop");
   if(state.auto){var idx=G.i;later(function(){if(screenName==="quiz"&&G&&G.i===idx&&G.done)nextQuestion(true);},1800);}
 }
-function qWrong(){
+function qWrong(keepMic){
   var q=G.list[G.i];
-  stopListening();
+  if(!keepMic) stopListening();
   G.tries++;
   if(state.timer){
     G.fbmsg={cls:"ng",html:"こたえが ちがうよ!<small>じかんいない なら なんど でも こたえられるよ</small>"};
@@ -617,7 +617,7 @@ function qWrong(){
     sndNg();
     if(state.method!=="voice") speak("こたえが ちがうよ");
     renderQuiz();reactMascot("shake");
-    if(state.method==="voice"&&voiceAvailable()) later(startQuizMic,700);
+    if(!keepMic&&state.method==="voice"&&voiceAvailable()) later(startQuizMic,700);
     return;
   }
   if(G.tries>=2){
@@ -649,11 +649,13 @@ function startQuizMic(){
       if(done)return;
       var alts=Array.isArray(t)?t:[t];G.heard="きこえた:「"+alts[0]+"」";
       for(var i=0;i<alts.length;i++){ if(judgeSpeech(alts[i],q.a,q.b)){done=true;qCorrect(G.tries===0);return;} }
+      if(state.timer){qWrong(true);return;}
       done=true;qWrong();},
     end:function(){ if(listening&&!done){listening=false;
       if(state.timer&&!G.done&&lastDiag.indexOf("エラー")<0){later(startQuizMic,300);return;}
       G.fbmsg={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね<small>"+esc(lastDiag||"マイクから おとが とどいていません")+"</small>"};renderQuiz();} },
-    fail:function(why){micFail(why,function(){renderQuiz();});}
+    fail:function(why){micFail(why,function(){renderQuiz();});},
+    keep:state.timer
   };
   if(startListening(h)) renderQuiz();
 }
