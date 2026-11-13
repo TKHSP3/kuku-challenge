@@ -139,12 +139,26 @@ button.q{cursor:pointer}
 
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
 .sr{position:absolute;left:-9999px}
+#alarm{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;background:radial-gradient(ellipse at center,rgba(255,40,30,0) 35%,rgba(255,30,20,.75) 100%);box-shadow:inset 0 0 0 10px rgba(255,40,30,.85)}
+#alarm.on{animation:blink 1s steps(1,end) infinite}
+#alarm.fast{animation:blink .5s steps(1,end) infinite}
+@keyframes blink{0%{opacity:1}50%{opacity:.08}}
+@media (prefers-reduced-motion:reduce){#alarm.on,#alarm.fast{animation:none;opacity:.7}}
+.timer{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.tbar{flex:1;height:18px;background:var(--line);border-radius:999px;overflow:hidden}
+.tbar i{display:block;height:100%;width:100%;background:var(--ok);border-radius:999px;transition:width .1s linear,background .3s}
+.timer b{font-size:34px;font-weight:900;min-width:2ch;text-align:right;line-height:1;font-variant-numeric:tabular-nums}
+.timer.hot b{color:var(--ng)}.timer.hot .tbar i{background:var(--ng)}
+.timer.hot b{animation:pop .5s ease infinite}
+@keyframes pop{50%{transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.timer.hot b{animation:none}}
 @media (max-width:420px){.dans{gap:8px}.mascot{width:68px;height:68px}.modes{gap:10px}}
 </style>
 
 </head>
 <body>
 <canvas id="fx" aria-hidden="true"></canvas>
+<div id="alarm" aria-hidden="true"></div>
 <div class="wrap">
   <div class="top">
     <h1 class="logo"><span>く</span><span>く</span><span>チ</span><span>ャ</span><span>レンジ</span></h1>
@@ -241,7 +255,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 var state = {
   sel: load("kuku.sel",[2]),
-  order: load("kuku.order","rand"),auto: load("kuku.auto",true),
+  order: load("kuku.order","rand"),auto: load("kuku.auto",true),timer: load("kuku.timer",true),
   method: load("kuku.method","voice"),
   totalStars: load("kuku.stars",0)
 };
@@ -412,7 +426,35 @@ function makeChoices(q){
 /* ---------- 画面 ---------- */
 var screenName="", G=null, timers=[];
 function later(fn,ms){var id=setTimeout(fn,ms);timers.push(id);return id;}
-function clearTimers(){timers.forEach(clearTimeout);timers=[];}
+var qTimer=0,lastSec=-1;
+function stopTimer(){if(qTimer){clearInterval(qTimer);qTimer=0;}var a=document.getElementById("alarm");if(a)a.className="";}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];stopTimer();}
+function timerHtml(){return '<div class="timer" id="timer"><div class="tbar"><i id="tfill"></i></div><b id="tnum">10</b></div>';}
+function ensureTimer(){
+  if(!state.timer||!G||G.done){stopTimer();return;}
+  if(!G.deadline){G.deadline=Date.now()+10000;lastSec=-1;}
+  if(!qTimer) qTimer=setInterval(tickTimer,100);
+  tickTimer();
+}
+function tickTimer(){
+  if(screenName!=="quiz"||!G||G.done){stopTimer();return;}
+  var ms=G.deadline-Date.now(),sec=Math.max(0,Math.ceil(ms/1000));
+  var f=document.getElementById("tfill"),n=document.getElementById("tnum"),t=document.getElementById("timer"),a=document.getElementById("alarm");
+  if(f)f.style.width=Math.max(0,ms/100)+"%";
+  if(n)n.textContent=sec;
+  var hot=sec<=5&&ms>0;
+  if(t)t.classList.toggle("hot",hot);
+  if(a)a.className=hot?(sec<=3?"fast":"on"):"";
+  if(sec!==lastSec){lastSec=sec;if(hot)tone([sec<=3?988:784],.07,"square");}
+  if(ms<=0) timeUp();
+}
+function timeUp(){
+  stopTimer();stopListening();
+  var q=G.list[G.i];
+  G.done=true;G.res[G.i]="ng";G.wrong.push(q);
+  G.fbmsg={cls:"ng",html:"じかんぎれ! こたえは "+(q.a*q.b)+" だよ<small>つぎは もっと はやく いってみよう</small>"};
+  sndNg();renderQuiz();reactMascot("shake");speak(trad(q.a,q.b).text);
+}
 function go(name,fn){stopListening();listener=null;clearTimers();screenName=name;if(fn)fn();render();window.scrollTo(0,0);}
 function render(){
   if(screenName==="home") renderHome();
@@ -429,7 +471,7 @@ function renderHome(){
   }
   h+='</div>';
   h+='<div class="row" style="margin-top:12px"><button class="pill" data-act="all">ぜんぶ えらぶ</button><button class="pill" data-act="none">ぜんぶ はずす</button>'+
-     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><h2>クイズの とき</h2><div class="row"><button class="pill" data-act="auto" aria-pressed="'+state.auto+'">せいかいしたら じどうで つぎへ(こえは マイクも じどう)</button></div>';
+     '</div><h2>もんだいの じゅんばん</h2><div class="row">'+[["asc","ちいさい じゅん(1→9)"],["desc","おおきい じゅん(9→1)"],["rand","バラバラ"]].map(function(o){return '<button class="pill" data-act="order" data-o="'+o[0]+'" aria-pressed="'+(state.order===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><h2>クイズの とき</h2><div class="row"><button class="pill" data-act="timer" aria-pressed="'+state.timer+'">1もん 10びょう(あかく ひかる!)</button><button class="pill" data-act="auto" aria-pressed="'+state.auto+'">せいかいしたら じどうで つぎへ(こえは マイクも じどう)</button></div>';
   var none=state.sel.length===0;
   h+='<h2>あそびかた</h2><div class="modes">'+
    '<button class="mode flash" data-act="flash"'+(none?' disabled':'')+'><svg><use href="#i-card"/></svg>フラッシュカード<small>めくって おぼえる</small></button>'+
@@ -524,6 +566,7 @@ function renderQuiz(){
   var t=trad(q.a,q.b), ans=q.a*q.b;
   var dots=''; for(var i=0;i<G.list.length;i++){dots+='<span class="dot'+(i===G.i?' cur':'')+(G.res[i]==="ok"?' ok':G.res[i]==="ng"?' ng':'')+'"></span>';}
   var h='<div class="bar"><button class="back" data-act="home">‹ もどる</button><span class="dots" aria-label="'+(G.i+1)+'もんめ">'+dots+'</span></div>';
+  if(state.timer&&!G.done) h+=timerHtml();
   h+='<div class="q" style="--c:var('+COLORS[q.a]+')"><span class="hint">'+(G.i+1)+' もんめ</span>';
   if(G.done){
     h+='<span class="eq" style="font-size:clamp(36px,10vw,60px)">'+q.a+'<i>×</i>'+q.b+'</span><span class="ans">'+ans+'</span><span class="yomi">'+(q.a===0||q.b===0?'ぜろ':t.pre+' '+t.ans)+'</span>';
@@ -552,10 +595,11 @@ function renderQuiz(){
     }
   }
   app.innerHTML=h;
+  ensureTimer();
 }
 function qCorrect(first){
   var q=G.list[G.i];
-  stopListening();
+  stopListening();stopTimer();
   G.done=true;G.res[G.i]="ok";if(first)G.score++;
   G.fbmsg={cls:"ok",html:randPraise()+(first?'<small>1かいで せいかい! ほし +1</small>':'<small>せいかい!</small>')};
   if(first){state.totalStars++;save("kuku.stars",state.totalStars);showStars();}
@@ -567,8 +611,17 @@ function qWrong(){
   var q=G.list[G.i];
   stopListening();
   G.tries++;
+  if(state.timer){
+    G.fbmsg={cls:"ng",html:"こたえが ちがうよ!<small>じかんいない なら なんど でも こたえられるよ</small>"};
+    G.typed="";
+    sndNg();
+    if(state.method!=="voice") speak("こたえが ちがうよ");
+    renderQuiz();reactMascot("shake");
+    if(state.method==="voice"&&voiceAvailable()) later(startQuizMic,700);
+    return;
+  }
   if(G.tries>=2){
-    G.done=true;G.res[G.i]="ng";G.wrong.push(q);
+    stopTimer();G.done=true;G.res[G.i]="ng";G.wrong.push(q);
     G.fbmsg={cls:"ng",html:"ざんねん! こたえは "+(q.a*q.b)+" だよ<small>いっしょに よんで おぼえよう</small>"};
     speak(trad(q.a,q.b).text);
   } else {
@@ -587,7 +640,7 @@ function startQuizMic(){
   if(G.done)return;
   if(listening){stopListening();renderQuiz();return;}
   var q=G.list[G.i], done=false;
-  G.heard="";G.fbmsg=null;
+  G.heard="";if(!G.tries)G.fbmsg=null;
   var h={
     partial:function(t){var s=Array.isArray(t)?t[0]:t;G.heard="きこえた:「"+s+"」";setHeard();
       var alts=Array.isArray(t)?t:[t];
@@ -597,14 +650,16 @@ function startQuizMic(){
       var alts=Array.isArray(t)?t:[t];G.heard="きこえた:「"+alts[0]+"」";
       for(var i=0;i<alts.length;i++){ if(judgeSpeech(alts[i],q.a,q.b)){done=true;qCorrect(G.tries===0);return;} }
       done=true;qWrong();},
-    end:function(){ if(listening&&!done){listening=false;G.fbmsg={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね<small>"+esc(lastDiag||"マイクから おとが とどいていません")+"</small>"};renderQuiz();} },
+    end:function(){ if(listening&&!done){listening=false;
+      if(state.timer&&!G.done&&lastDiag.indexOf("エラー")<0){later(startQuizMic,300);return;}
+      G.fbmsg={cls:"info",html:"きこえなかったよ。もういちど ボタンを おしてね<small>"+esc(lastDiag||"マイクから おとが とどいていません")+"</small>"};renderQuiz();} },
     fail:function(why){micFail(why,function(){renderQuiz();});}
   };
   if(startListening(h)) renderQuiz();
 }
 function nextQuestion(auto){
   clearTimers();
-  G.i++;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
+  G.i++;G.deadline=null;G.tries=0;G.done=false;G.typed="";G.fbmsg=null;G.heard="";G.choices=null;G.badPick=null;
   if(G.i>=G.list.length){finishQuiz();return;}
   renderQuiz();
   if(auto&&state.method==="voice"&&voiceAvailable()) startQuizMic();
@@ -671,6 +726,7 @@ app.addEventListener("click",function(e){
   }
   else if(act==="pick"){submitValue(+el.getAttribute("data-v"));}
   else if(act==="qnext"){nextQuestion(false);}
+  else if(act==="timer"){state.timer=!state.timer;save("kuku.timer",state.timer);renderHome();}
   else if(act==="auto"){state.auto=!state.auto;save("kuku.auto",state.auto);renderHome();}
 });
 addEventListener("keydown",function(e){
